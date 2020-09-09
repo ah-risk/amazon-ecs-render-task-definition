@@ -1090,6 +1090,7 @@ async function run() {
     const containerName = core.getInput('container-name', { required: true });
     const imageURI = core.getInput('image', { required: true });
     const gitSha = core.getInput('git-sha', { required: true });
+    const gitBranch = core.getInput('git-branch', { required: true });
 
     // Parse the task definition
     const taskDefPath = path.isAbsolute(taskDefinitionFile) ?
@@ -1117,6 +1118,7 @@ async function run() {
       containerDef.environment = [];
     }
     containerDef.environment.push({ "name": "GIT_SHA", "value": gitSha });
+    containerDef.environment.push({ "name": "GIT_BRANCH", "value": gitBranch });
 
     // Write out a new task definition file
     var updatedTaskDefFile = tmp.fileSync({
