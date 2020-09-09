@@ -26,6 +26,7 @@ To insert the image URI `amazon/amazon-ecs-sample:latest` as the image for the `
         container-name: web
         image: amazon/amazon-ecs-sample:latest
         git-sha: ${{ github.sha }}
+        git-branch: ${{ name-of-the-git-branch }}
 
     - name: Deploy to Amazon ECS service
       uses: aws-actions/amazon-ecs-deploy-task-definition@v1
@@ -49,6 +50,7 @@ input of the second:
         container-name: web
         image: amazon/amazon-ecs-sample-1:latest
         git-sha: ${{ github.sha }}
+        git-branch: ${{ name-of-the-git-branch }}
 
     - name: Modify Amazon ECS task definition with second container
       id: render-app-container
@@ -58,6 +60,7 @@ input of the second:
         container-name: app
         image: amazon/amazon-ecs-sample-2:latest
         git-sha: ${{ github.sha }}
+        git-branch: ${{ name-of-the-git-branch }}
 
     - name: Deploy to Amazon ECS service
       uses: aws-actions/amazon-ecs-deploy-task-definition@v1

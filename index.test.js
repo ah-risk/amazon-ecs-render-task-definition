@@ -17,7 +17,8 @@ describe('Render task definition', () => {
             .mockReturnValueOnce('task-definition.json') // task-definition
             .mockReturnValueOnce('web')                  // container-name
             .mockReturnValueOnce('nginx:latest')         // image
-            .mockReturnValueOnce('gitsha');              // git-sha
+            .mockReturnValueOnce('gitsha')               // git-sha
+            .mockReturnValueOnce('gitbranch');           // git-branch
 
         process.env = Object.assign(process.env, { GITHUB_WORKSPACE: __dirname });
         process.env = Object.assign(process.env, { RUNNER_TEMP: '/home/runner/work/_temp' });
@@ -59,7 +60,10 @@ describe('Render task definition', () => {
                     {
                         name: "web",
                         image: "nginx:latest",
-                        environment: [ { "name": "GIT_SHA", "value": "gitsha" } ]
+                        environment: [
+                            { "name": "GIT_SHA", "value": "gitsha" },
+                            { "name": "GIT_BRANCH", "value": "gitbranch" }
+                        ]
                     },
                     {
                         name: "sidecar",
@@ -77,7 +81,8 @@ describe('Render task definition', () => {
             .mockReturnValueOnce('/hello/task-definition.json') // task-definition
             .mockReturnValueOnce('web')                  // container-name
             .mockReturnValueOnce('nginx:latest')         // image
-            .mockReturnValueOnce('gitsha');        // git-sha
+            .mockReturnValueOnce('gitsha')               // git-sha
+            .mockReturnValueOnce('gitbranch');              // git-branch
         jest.mock('/hello/task-definition.json', () => ({
             family: 'task-def-family',
             containerDefinitions: [
@@ -104,7 +109,10 @@ describe('Render task definition', () => {
                     {
                         name: "web",
                         image: "nginx:latest",
-                        environment: [ { "name": "GIT_SHA", "value": "gitsha" } ]
+                        environment: [
+                            { "name": "GIT_SHA", "value": "gitsha" },
+                            { "name": "GIT_BRANCH", "value": "gitbranch" }
+                        ]
                     }
                 ]
             }, null, 2)

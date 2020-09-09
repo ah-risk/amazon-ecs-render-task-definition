@@ -13,8 +13,11 @@ inputs:
   image:
     description: 'The URI of the container image to insert into the ECS task definition'
     required: true
-  git_sha:
+  git-sha:
     description: 'The SHA of the git commit'
+    required: true
+  git-branch:
+    description: 'The branch in which this action was triggered'
     required: true
 outputs:
   task-definition:
