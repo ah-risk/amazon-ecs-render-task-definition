@@ -13,12 +13,12 @@ inputs:
   image:
     description: 'The URI of the container image to insert into the ECS task definition'
     required: true
-  git-sha:
-    description: 'The SHA of the git commit'
-    required: true
-  git-branch:
-    description: 'The branch in which this action was triggered'
-    required: true
+  meta-table:
+    description: 'The name of the DynamoDB table that stores the meta information'
+    required: false
+  meta-key:
+    description: 'The primary key in the DynamoDB meta table'
+    required: false
 outputs:
   task-definition:
     description: 'The path to the rendered task definition file'

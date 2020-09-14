@@ -25,8 +25,8 @@ To insert the image URI `amazon/amazon-ecs-sample:latest` as the image for the `
         task-definition: task-definition.json
         container-name: web
         image: amazon/amazon-ecs-sample:latest
-        git-sha: ${{ github.sha }}
-        git-branch: ${{ name-of-the-git-branch }}
+        meta-table: dynamodb-meta-table
+        meta-key: MetaID
 
     - name: Deploy to Amazon ECS service
       uses: aws-actions/amazon-ecs-deploy-task-definition@v1
@@ -35,6 +35,7 @@ To insert the image URI `amazon/amazon-ecs-sample:latest` as the image for the `
         service: my-service
         cluster: my-cluster
 ```
+Additionally, meta-table and meta-key may be specified, which allows replacing placeholders in the task definitions file in the form `[meta:key]`. `key` will be looked up in the AWS DynamoDB table specified by `meta-table`, and substituted by the `value` attribute.
 
 If your task definition file holds multiple containers in the `containerDefinitions`
 section which require updated image URIs, chain multiple executions of this action
@@ -49,8 +50,8 @@ input of the second:
         task-definition: task-definition.json
         container-name: web
         image: amazon/amazon-ecs-sample-1:latest
-        git-sha: ${{ github.sha }}
-        git-branch: ${{ name-of-the-git-branch }}
+        meta-table: dynamodb-meta-table
+        meta-key: MetaID
 
     - name: Modify Amazon ECS task definition with second container
       id: render-app-container
@@ -59,8 +60,8 @@ input of the second:
         task-definition: ${{ steps.render-web-container.outputs.task-definition }}
         container-name: app
         image: amazon/amazon-ecs-sample-2:latest
-        git-sha: ${{ github.sha }}
-        git-branch: ${{ name-of-the-git-branch }}
+        meta-table: dynamodb-meta-table
+        meta-key: MetaID
 
     - name: Deploy to Amazon ECS service
       uses: aws-actions/amazon-ecs-deploy-task-definition@v1

@@ -6,6 +6,14 @@ const fs = require('fs');
 jest.mock('@actions/core');
 jest.mock('tmp');
 jest.mock('fs');
+const mockDynamoGetItem = jest.fn();
+jest.mock("aws-sdk", () => {
+    return {
+        DynamoDB: jest.fn(() => ({
+            getItem: mockDynamoGetItem
+        }))
+    }
+});
 
 describe('Render task definition', () => {
 
@@ -17,11 +25,14 @@ describe('Render task definition', () => {
             .mockReturnValueOnce('task-definition.json') // task-definition
             .mockReturnValueOnce('web')                  // container-name
             .mockReturnValueOnce('nginx:latest')         // image
-            .mockReturnValueOnce('gitsha')               // git-sha
-            .mockReturnValueOnce('gitbranch');           // git-branch
+            .mockReturnValueOnce('meta-table')           // meta-table
+            .mockReturnValueOnce('MetaID');              // meta-key
 
         process.env = Object.assign(process.env, { GITHUB_WORKSPACE: __dirname });
         process.env = Object.assign(process.env, { RUNNER_TEMP: '/home/runner/work/_temp' });
+        process.env = Object.assign(process.env, { GITHUB_REF: "refs/heads/github-ref" });
+        process.env = Object.assign(process.env, { GITHUB_REPOSITORY: "github/repo" });
+        process.env = Object.assign(process.env, { GITHUB_SHA: "githubsha" });
 
         tmp.fileSync.mockReturnValue({
             name: 'new-task-def-file-name'
@@ -29,7 +40,7 @@ describe('Render task definition', () => {
 
         fs.existsSync.mockReturnValue(true);
 
-        jest.mock('./task-definition.json', () => ({
+        jest.mock('./task-definition.json', () => JSON.parse(JSON.stringify({
             family: 'task-def-family',
             containerDefinitions: [
                 {
@@ -40,8 +51,25 @@ describe('Render task definition', () => {
                     name: "sidecar",
                     image: "hello"
                 }
-            ]
-        }), { virtual: true });
+            ],
+            "taskRoleArn": "[meta:test-substitution]"
+        })), { virtual: true });
+
+        mockDynamoGetItem.mockImplementation((params) => {
+            return {
+                promise() {
+                    const req = Object.keys(params.Key);
+                    const item = {};
+                    if (req.length > 0 && req[0] === "MetaID" && params.Key[req[0]].S === "test-substitution") {
+                        item["MetaID"] = params.Key[req[0]];
+                        item["value"] = {"S": "substituted-value"};
+                    }
+                    return Promise.resolve({
+                        Item: item
+                    });
+                }
+            }
+        });
     });
 
     test('renders the task definition and creates a new task def file', async () => {
@@ -61,14 +89,19 @@ describe('Render task definition', () => {
                         name: "web",
                         image: "nginx:latest",
                         environment: [
-                            { "name": "GIT_SHA", "value": "gitsha" },
-                            { "name": "GIT_BRANCH", "value": "gitbranch" }
+                            { "name": "GIT_SHA", "value": "githubsha" },
+                            { "name": "GIT_REPOSITORY", "value": "github/repo" },
+                            { "name": "GIT_BRANCH", "value": "github-ref" }
                         ]
                     },
                     {
                         name: "sidecar",
                         image: "hello"
                     }
+                ],
+                "taskRoleArn": "substituted-value",
+                "tags": [
+                    { "key": "GIT_REPOSITORY", "value": "github/repo" }
                 ]
             }, null, 2)
         );
@@ -80,17 +113,17 @@ describe('Render task definition', () => {
             .fn()
             .mockReturnValueOnce('/hello/task-definition.json') // task-definition
             .mockReturnValueOnce('web')                  // container-name
-            .mockReturnValueOnce('nginx:latest')         // image
-            .mockReturnValueOnce('gitsha')               // git-sha
-            .mockReturnValueOnce('gitbranch');              // git-branch
+            .mockReturnValueOnce('nginx:latest');         // image
         jest.mock('/hello/task-definition.json', () => ({
             family: 'task-def-family',
             containerDefinitions: [
                 {
                     name: "web",
-                    image: "some-other-image"
+                    image: "some-other-image",
+                    environment: []
                 }
-            ]
+            ],
+            tags: []
         }), { virtual: true });
 
         await run();
@@ -110,10 +143,14 @@ describe('Render task definition', () => {
                         name: "web",
                         image: "nginx:latest",
                         environment: [
-                            { "name": "GIT_SHA", "value": "gitsha" },
-                            { "name": "GIT_BRANCH", "value": "gitbranch" }
+                            { "name": "GIT_SHA", "value": "githubsha" },
+                            { "name": "GIT_REPOSITORY", "value": "github/repo" },
+                            { "name": "GIT_BRANCH", "value": "github-ref" }
                         ]
                     }
+                ],
+                "tags": [
+                    { "key": "GIT_REPOSITORY", "value": "github/repo" }
                 ]
             }, null, 2)
         );
@@ -184,5 +221,83 @@ describe('Render task definition', () => {
         await run();
 
         expect(core.setFailed).toBeCalledWith('Invalid task definition: Could not find container definition with matching name');
+    });
+
+    test('error returned for task definition with meta substitution without specified meta-table', async () => {
+        jest.mock('./task-definition-no-table.json', () => ({
+            family: 'task-def-family',
+            containerDefinitions: [
+                {
+                    name: "main",
+                    image: "some-other-image"
+                }
+            ],
+            taskRoleArn: "[meta:substitution-missing]"
+        }), { virtual: true });
+
+        core.getInput = jest
+            .fn()
+            .mockReturnValueOnce('task-definition-no-table.json')
+            .mockReturnValueOnce('main')
+            .mockReturnValueOnce('nginx:latest');
+
+        await run();
+
+        expect(core.setFailed).toBeCalledWith('Encountered meta substitution but table was not specified');
+    });
+
+    test('existing environment and tag values are not overwritten', async () => {
+        jest.mock('./task-definition-no-overwrite.json', () => ({
+            family: 'task-def-family',
+            containerDefinitions: [
+                {
+                    name: "main",
+                    image: "nginx:latest",
+                    environment: [
+                        { "name": "GIT_SHA", "value": "testsha" },
+                        { "name": "GIT_REPOSITORY", "value": "test/repo" },
+                        { "name": "GIT_BRANCH", "value": "test-ref" }
+                    ]
+                }
+            ],
+            "tags": [
+                { "key": "GIT_REPOSITORY", "value": "test/repo" }
+            ]
+        }), { virtual: true });
+        core.getInput = jest
+            .fn()
+            .mockReturnValueOnce('task-definition-no-overwrite.json')
+            .mockReturnValueOnce('main')
+            .mockReturnValueOnce('nginx:latest');
+
+        await run();
+
+        expect(tmp.fileSync).toHaveBeenNthCalledWith(1, {
+            tmpdir: '/home/runner/work/_temp',
+            prefix: 'task-definition-',
+            postfix: '.json',
+            keep: true,
+            discardDescriptor: true
+          });
+        expect(fs.writeFileSync).toHaveBeenNthCalledWith(1, 'new-task-def-file-name',
+            JSON.stringify({
+                family: 'task-def-family',
+                containerDefinitions: [
+                    {
+                        name: "main",
+                        image: "nginx:latest",
+                        environment: [
+                            { "name": "GIT_SHA", "value": "testsha" },
+                            { "name": "GIT_REPOSITORY", "value": "test/repo" },
+                            { "name": "GIT_BRANCH", "value": "test-ref" }
+                        ]
+                    }
+                ],
+                "tags": [
+                    { "key": "GIT_REPOSITORY", "value": "test/repo" }
+                ]
+            }, null, 2)
+        );
+        expect(core.setOutput).toHaveBeenNthCalledWith(1, 'task-definition', 'new-task-def-file-name');
     });
 });
